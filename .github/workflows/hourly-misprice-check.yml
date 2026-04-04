@@ -1,0 +1,26 @@
+name: Hourly Hotel Misprice Check
+
+on:
+  schedule:
+    - cron: '1 * * * *'
+  workflow_dispatch:
+
+jobs:
+  check-misprices:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    - run: |
+        pip install requests feedparser
+        python misprice_checker.py
+    - run: |
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+        if [[ -n $(git status -s) ]]; then
+          git add -A
+          git commit -m "Update misprices - $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push
+        fi
