@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Hotel Deals — Live Dashboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: Georgia, serif;
+      background: #0a0a0f;
+      color: #e8e4dc;
+      padding: 20px;
+    }
+    .wrapper { max-width: 900px; margin: 0 auto; }
+    .header {
+      background: linear-gradient(135deg, #1a1a2e, #0f3460);
+      border: 1px solid #c9a84c;
+      border-radius: 12px;
+      padding: 40px;
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .header h1 { font-size: 34px; color: #fff; margin-bottom: 10px; }
+    .header h1 span { color: #c9a84c; }
+    .header p { color: #a0a8b8; margin-bottom: 20px; }
+    .alert { background: rgba(50,200,100,0.1); border: 1px solid rgba(50,200,100,0.25); padding: 14px; border-radius: 8px; margin-bottom: 20px; }
+    .alert-label { color: #32c864; font-weight: bold; margin-bottom: 6px; }
+    .section-title { font-size: 18px; color: #fff; margin-top: 30px; margin-bottom: 16px; border-bottom: 1px solid rgba(201,168,76,0.2); padding-bottom: 10px; }
+    .deal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .deal-card {
+      background: #12121f;
+      border: 1px solid rgba(201,168,76,0.2);
+      border-radius: 10px;
+      padding: 18px;
+    }
+    .deal-card h3 { font-size: 16px; color: #fff; margin-bottom: 8px; }
+    .deal-card .location { font-size: 11px; color: #c9a84c; text-transform: uppercase; margin-bottom: 8px; }
+    .deal-card .price { font-size: 22px; color: #c9a84c; font-weight: bold; margin-bottom: 8px; }
+    .deal-card .desc { font-size: 13px; color: #8a90a0; line-height: 1.5; margin-bottom: 10px; }
+    .deal-card a { color: #c9a84c; text-decoration: none; border: 1px solid rgba(201,168,76,0.3); padding: 6px 14px; border-radius: 5px; font-size: 12px; display: inline-block; }
+    .footer { text-align: center; padding: 30px 0; border-top: 1px solid rgba(255,255,255,0.06); margin-top: 30px; color: #444; font-size: 12px; }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+
+  <div class="header">
+    <div style="display:inline-block; background:rgba(201,168,76,0.15); border:1px solid #c9a84c; color:#c9a84c; font-size:11px; letter-spacing:3px; text-transform:uppercase; padding:5px 16px; border-radius:20px; margin-bottom:20px;">📡 Daily Intelligence Report</div>
+    <h1>Hotel <span>Mistake Rates</span> & Deals</h1>
+    <p>4-Star & 5-Star properties in safe destinations — updated hourly</p>
+    <div id="lastUpdate" style="color:#c9a84c; font-size:13px;"></div>
+  </div>
+
+  <div class="alert">
+    <div class="alert-label">✓ AUTOMATION ACTIVE</div>
+    <p style="color:#556; font-size:13px; margin:0;">GitHub Actions running hourly. Dashboard updates automatically. Check back regularly for live misprice alerts.</p>
+  </div>
+
+  <div class="section-title">★★★★★ Five-Star Deals</div>
+  <div class="deal-grid">
+    <div class="deal-card">
+      <div class="location">Turks & Caicos</div>
+      <h3>Grace Bay Club</h3>
+      <div class="price">30% OFF + $100 Credit</div>
+      <div class="desc">World-famous Grace Bay Beach. Book by April 11 for travel through December.</div>
+      <a href="https://gracebayclub.gracebayresorts.com/">Book Now →</a>
+    </div>
+    <div class="deal-card">
+      <div class="location">Tokyo, Japan</div>
+      <h3>Aman Tokyo — Weak Yen</h3>
+      <div class="price">~$530/night</div>
+      <div class="desc">Japan's weak yen = 30% off vs. pre-2022 rates. Live every single day.</div>
+      <a href="https://www.aman.com/hotels/aman-tokyo">View →</a>
+    </div>
+    <div class="deal-card">
+      <div class="location">Venice, Italy</div>
+      <h3>Orient Express Palazzo</h3>
+      <div class="price">Opening Rate</div>
+      <div class="desc">Opening April 2026. Introductory rates 20-40% below normal (always honoured).</div>
+      <a href="https://www.accor.com/">Check Rates →</a>
+    </div>
+  </div>
+
+  <div class="section-title">★★★★ Four-Star Deals</div>
+  <div class="deal-grid">
+    <div class="deal-card">
+      <div class="location">Costa Rica</div>
+      <h3>Occidental Tamarindo</h3>
+      <div class="price">$99/person/night</div>
+      <div class="desc">7-night all-inclusive. Food, drinks, activities covered.</div>
+      <a href="https://www.vacationstogo.com/">Book Now →</a>
+    </div>
+    <div class="deal-card">
+      <div class="location">Venice, Italy</div>
+      <h3>Hyatt Centric Murano</h3>
+      <div class="price">From £257pp</div>
+      <div class="desc">3 nights + flights from Manchester, April 19 departure.</div>
+      <a href="https://www.gbnews.com/travel/">View Deal →</a>
+    </div>
+    <div class="deal-card">
+      <div class="location">Barbados</div>
+      <h3>Spring Offer</h3>
+      <div class="price">10% OFF + $100 Credit</div>
+      <div class="desc">Multiple 4-star properties. Valid through May 3, 2026.</div>
+      <a href="https://www.destination2.co.uk/">Browse →</a>
+    </div>
+  </div>
+
+  <div class="section-title">📡 Monitor These Daily</div>
+  <div style="background:#0f0f1e; border:1px solid rgba(255,255,255,0.07); border-radius:8px; padding:16px; margin-bottom:24px;">
+    <p style="color:#7a8090; font-size:13px; line-height:1.8; margin:0;">
+      <a href="https://www.secretflying.com/hotel-deals/" style="color:#c9a84c;">Secret Flying</a> · 
+      <a href="https://www.flyertalk.com/forum/hotel-deals/" style="color:#c9a84c;">FlyerTalk</a> · 
+      <a href="https://www.fly4free.com/flight-deals/hotel-mistake-rate/" style="color:#c9a84c;">Fly4Free</a> · 
+      <a href="https://www.hoteltonight.com/" style="color:#c9a84c;">HotelTonight</a>
+    </p>
+  </div>
+
+  <div class="footer">
+    <p>🔁 This dashboard updates automatically every hour via GitHub Actions<br>
+    <strong>Bookmark this page</strong> for your daily hotel deals briefing<br>
+    Powered by Claude AI + GitHub Actions</p>
+  </div>
+
+</div>
+
+<script>
+  const d = new Date();
+  const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+  document.getElementById('lastUpdate').textContent = 'Updated: ' + d.toLocaleDateString('en-US', options);
+</script>
+</body>
+</html>
