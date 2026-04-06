@@ -50,7 +50,7 @@ EXCLUDE_KEYWORDS = [
 ]
 
 def load_misprice_log():
-    """Load existing misprices from the last 24 hours"""
+    """Load existing misprices for deduplication"""
     misprices = {}
     if os.path.exists(MISPRICE_LOG_FILE):
         try:
@@ -64,20 +64,49 @@ def load_misprice_log():
                         hotel, location, price, timestamp = parts[0], parts[1], parts[2], parts[3]
                         key = f"{hotel}|{location}"
                         misprices[key] = {
+                            "hotel": hotel,
+                            "location": location,
                             "price": price,
                             "timestamp": timestamp,
-                            "source": parts[4] if len(parts) > 4 else "unknown"
+                            "source": parts[4] if len(parts) > 4 else "unknown",
+                            "link": parts[5] if len(parts) > 5 else "#"
                         }
         except Exception as e:
             print(f"Error loading misprice log: {e}")
     return misprices
 
-def save_misprice(hotel, location, price, source):
+
+def get_all_recent_misprices(misprices_log):
+    """Get all misprices from the last 24 hours for dashboard display"""
+    recent = []
+    now = datetime.utcnow()
+    for key, data in misprices_log.items():
+        try:
+            ts = datetime.fromisoformat(data["timestamp"].replace("Z", "+00:00"))
+            age = now.replace(tzinfo=ts.tzinfo) - ts
+            if age < timedelta(hours=24):
+                mins = int(age.total_seconds() / 60)
+                recent.append({
+                    "hotel": data["hotel"],
+                    "location": data["location"],
+                    "price": data["price"],
+                    "normal_price": "N/A",
+                    "source": data["source"],
+                    "link": data.get("link", "#"),
+                    "minutes_ago": mins
+                })
+        except:
+            pass
+    # Sort by most recent first
+    recent.sort(key=lambda x: x["minutes_ago"])
+    return recent
+
+def save_misprice(hotel, location, price, source, link="#"):
     """Save a new misprice to the log"""
     timestamp = datetime.utcnow().isoformat() + "Z"
     try:
         with open(MISPRICE_LOG_FILE, 'a') as f:
-            f.write(f"{hotel}|{location}|{price}|{timestamp}|{source}\n")
+            f.write(f"{hotel}|{location}|{price}|{timestamp}|{source}|{link}\n")
     except Exception as e:
         print(f"Error saving misprice: {e}")
 
@@ -526,20 +555,18 @@ def main():
             if not is_duplicate(hotel, location, misprices_log):
                 mp["minutes_ago"] = get_minutes_ago(mp.get("published", datetime.utcnow().isoformat()))
                 new_misprices.append(mp)
-                save_misprice(hotel, location, mp.get("price", "N/A"), mp.get("source", "unknown"))
+                save_misprice(hotel, location, mp.get("price", "N/A"), mp.get("source", "unknown"), mp.get("link", "#"))
                 print(f"✓ NEW MISPRICE: {hotel} ({location}) at {mp.get('price', 'N/A')}")
             else:
                 print(f"⊘ Duplicate: {hotel} ({location}) — already alerted")
 
-    # Update dashboard with all new misprices
-    if new_misprices:
-        update_dashboard(new_misprices)
-    else:
-        print("\n✓ No new misprices found, dashboard stays fresh")
-        # Still update dashboard to refresh timestamp
-        update_dashboard([])
+    # Reload log to get ALL misprices (old + new), then show last 24hrs on dashboard
+    updated_log = load_misprice_log()
+    all_recent = get_all_recent_misprices(updated_log)
+    print(f"\n📊 Total misprices in last 24 hours: {len(all_recent)}")
+    update_dashboard(all_recent)
 
-    print(f"\n✓ Check complete. Found {len(new_misprices)} new misprices")
+    print(f"✓ Check complete. Found {len(new_misprices)} new misprices this run")
     print("=" * 50)
 
 if __name__ == "__main__":
