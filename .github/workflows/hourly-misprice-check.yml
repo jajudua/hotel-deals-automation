@@ -2,8 +2,11 @@ name: Hourly Hotel Misprice Check
 
 on:
   schedule:
-    - cron: '1 * * * *'  # Run at :01 minutes every hour
-  workflow_dispatch:  # Allow manual trigger
+    - cron: '1 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   check-misprices:
@@ -11,12 +14,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
@@ -36,10 +39,9 @@ jobs:
       - name: Commit and push updates
         run: |
           git add luxury-hotel-deals-report.html misprice-log.txt
-          git commit -m "🚨 Dashboard update: $(date +'%Y-%m-%d %H:%M UTC')" || echo "No changes to commit"
-          git push
+          git diff --staged --quiet || git commit -m "🚨 Dashboard update: $(date +'%Y-%m-%d %H:%M UTC')"
+          git push || echo "Nothing to push"
 
       - name: Log execution
         run: |
           echo "✓ Misprice check completed at $(date)"
-          echo "Files checked: misprice-log.txt, luxury-hotel-deals-report.html"
