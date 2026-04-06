@@ -38,6 +38,7 @@ jobs:
 
       - name: Commit and push updates
         run: |
+          touch misprice-log.txt
           git add luxury-hotel-deals-report.html misprice-log.txt
           git diff --staged --quiet || git commit -m "🚨 Dashboard update: $(date +'%Y-%m-%d %H:%M UTC')"
           git push || echo "Nothing to push"
