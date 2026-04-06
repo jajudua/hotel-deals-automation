@@ -217,97 +217,83 @@ def get_minutes_ago(timestamp_str):
         return 0
 
 def update_dashboard(misprices):
-    """Update the HTML dashboard with live misprices"""
-    # Load existing dashboard
+    """Update the HTML dashboard with live misprices using BeautifulSoup"""
     if not os.path.exists(DASHBOARD_FILE):
         print(f"Dashboard file not found at {DASHBOARD_FILE}")
         return
 
-    with open(DASHBOARD_FILE, 'r') as f:
+    with open(DASHBOARD_FILE, 'r', encoding='utf-8') as f:
         dashboard_html = f.read()
 
-    # Generate misprice alerts HTML
-    misprices_cards = ""
+    soup = BeautifulSoup(dashboard_html, 'html.parser')
+    now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
 
-    if misprices:
-        for mp in misprices:
-            hotel = mp.get("hotel", "Hotel")
-            location = mp.get("location", "Location")
-            price = mp.get("price", "Price")
-            normal_price = mp.get("normal_price", "N/A")
-            link = mp.get("link", "#")
-            minutes_ago = mp.get("minutes_ago", 0)
+    # --- Update #mispriceAlerts div ---
+    alerts_div = soup.find('div', id='mispriceAlerts')
+    if alerts_div:
+        alerts_div.clear()
+        if misprices:
+            for mp in misprices:
+                hotel     = mp.get("hotel", "Hotel")
+                location  = mp.get("location", "Location")
+                price     = mp.get("price", "Price")
+                link      = mp.get("link", "#")
+                source    = mp.get("source", "Deal Site")
+                mins      = mp.get("minutes_ago", 0)
+                urgency   = "🔴 LIVE" if mins < 60 else ("🟠 COOLING" if mins < 360 else "⏳ FADING")
 
-            urgency = "🔴 LIVE" if minutes_ago < 60 else ("🟠 COOLING" if minutes_ago < 360 else "⏳ FADING")
-
-            urgency_warning = f'<div style="background:rgba(200,50,50,0.1);border:1px solid rgba(200,50,50,0.3);border-radius:6px;padding:8px 12px;margin-bottom:10px;"><p style="font-size:12px;color:#ff6464;margin:0;font-weight:bold;">⏰ ACT NOW — Posted {minutes_ago} minutes ago, window closing fast</p></div>' if minutes_ago < 60 else ''
-
-            misprices_cards += f'''
-            <div style="background:#1a1a30;border:2px solid rgba(200,50,50,0.5);border-radius:10px;padding:18px;margin-bottom:12px;">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
-                <div>
-                  <p style="font-size:10px;color:#ff6464;letter-spacing:2px;text-transform:uppercase;margin:0 0 4px;">{location}</p>
-                  <h3 style="font-size:16px;color:#fff;margin:0;font-weight:normal;">{hotel}</h3>
-                </div>
-                <span style="background:rgba(200,50,50,0.2);color:#ff6464;border:1px solid rgba(200,50,50,0.5);font-size:10px;font-weight:bold;padding:4px 10px;border-radius:20px;white-space:nowrap;">{urgency} — {minutes_ago} mins ago</span>
-              </div>
-              <div style="margin-bottom:10px;">
-                <p style="font-size:24px;color:#ff6464;font-weight:bold;margin:0;">{price}</p>
-                <p style="font-size:13px;color:#666;margin:4px 0 0;text-decoration:line-through;">Normal: {normal_price}</p>
-              </div>
-              <p style="font-size:13px;color:#8a90a0;line-height:1.5;margin:0 0 10px;">Source: {mp.get("source", "Deal Site")} | ✓ Recently Found</p>
-              {urgency_warning}
-              <div style="border-top:1px solid rgba(255,255,255,0.06);padding-top:12px;display:flex;gap:8px;">
-                <a href="{link}" style="flex:1;color:#fff;text-decoration:none;background:rgba(200,50,50,0.15);border:1px solid rgba(200,50,50,0.3);padding:6px;border-radius:5px;text-align:center;font-size:12px;font-weight:bold;">BOOK NOW →</a>
-                <a href="{link}" style="flex:1;color:#ff6464;text-decoration:none;border:1px solid rgba(200,50,50,0.3);padding:6px;border-radius:5px;text-align:center;font-size:12px;">See Post →</a>
-              </div>
-            </div>
-            '''
-
-    # Build the complete misprice section
-    if misprices:
-        misprice_section = f'''<div class="misprice-section">
-    <div class="misprice-header">
-      <span style="font-size:24px;">🚨</span>
-      <h2>LIVE MISPRICE ALERTS — LAST 24 HOURS</h2>
+                card_html = f'''
+<div style="background:#1a1a30;border:2px solid rgba(200,50,50,0.5);border-radius:10px;padding:18px;margin-bottom:12px;">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+    <div>
+      <p style="font-size:10px;color:#ff6464;letter-spacing:2px;text-transform:uppercase;margin:0 0 4px;">{location}</p>
+      <h3 style="font-size:16px;color:#fff;margin:0;font-weight:normal;">{hotel}</h3>
     </div>
-    <div id="mispriceAlerts">
-{misprices_cards}
-    </div>
-  </div>'''
+    <span style="background:rgba(200,50,50,0.2);color:#ff6464;border:1px solid rgba(200,50,50,0.5);font-size:10px;font-weight:bold;padding:4px 10px;border-radius:20px;white-space:nowrap;">{urgency} — {mins} mins ago</span>
+  </div>
+  <p style="font-size:24px;color:#ff6464;font-weight:bold;margin:0 0 6px;">{price}</p>
+  <p style="font-size:13px;color:#8a90a0;margin:0 0 10px;">Source: {source}</p>
+  <div style="display:flex;gap:8px;">
+    <a href="{link}" style="flex:1;color:#fff;text-decoration:none;background:rgba(200,50,50,0.15);border:1px solid rgba(200,50,50,0.3);padding:6px;border-radius:5px;text-align:center;font-size:12px;font-weight:bold;">BOOK NOW →</a>
+    <a href="{link}" style="flex:1;color:#ff6464;text-decoration:none;border:1px solid rgba(200,50,50,0.3);padding:6px;border-radius:5px;text-align:center;font-size:12px;">See Post →</a>
+  </div>
+</div>'''
+                alerts_div.append(BeautifulSoup(card_html, 'html.parser'))
+        else:
+            empty = soup.new_tag('p')
+            empty['class'] = 'misprice-empty'
+            empty.string = f"No active misprices at the moment. Checking Secret Flying, FlyerTalk, and Fly4Free hourly. Last checked: {now_str}"
+            alerts_div.append(empty)
     else:
-        misprice_section = f'''<div class="misprice-section">
-    <div class="misprice-header">
-      <span style="font-size:24px;">🚨</span>
-      <h2>LIVE MISPRICE ALERTS — LAST 24 HOURS</h2>
-    </div>
-    <div id="mispriceAlerts">
-      <p class="misprice-empty">No active misprices at the moment. Checking Secret Flying, FlyerTalk, and Fly4Free hourly. Last checked: {datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")}</p>
-    </div>
-  </div>'''
+        print("⚠ Could not find #mispriceAlerts div in dashboard")
 
-    # Find and replace the misprice section
-    # Look for the opening misprice-section div
-    start_marker = '<!-- 🚨 LIVE MISPRICE ALERTS SECTION -->'
-    end_marker = '<!-- 5-STAR DEALS -->'
+    # --- Update #mispriceLogo (activity log) div ---
+    log_div = soup.find('div', id='mispriceLogo')
+    if log_div:
+        log_div.clear()
+        if misprices:
+            for mp in misprices:
+                entry_html = f'''
+<div class="log-entry">
+  <span class="log-hotel">{mp.get("hotel","Hotel")} — {mp.get("location","Location")}</span>
+  <span class="log-time">{mp.get("price","N/A")} · {mp.get("source","?")} · just now</span>
+</div>'''
+                log_div.append(BeautifulSoup(entry_html, 'html.parser'))
+        else:
+            empty = soup.new_tag('p')
+            empty['class'] = 'log-empty'
+            empty.string = f"No misprices spotted yet. Last checked: {now_str}"
+            log_div.append(empty)
 
-    start_idx = dashboard_html.find(start_marker)
-    end_idx = dashboard_html.find(end_marker)
+    # --- Update lastChecked span ---
+    span = soup.find('span', id='lastChecked')
+    if span:
+        span.string = now_str
 
-    if start_idx >= 0 and end_idx > start_idx:
-        # Replace the section
-        dashboard_html = dashboard_html[:start_idx] + misprice_section + '\n\n  ' + dashboard_html[end_idx:]
-    else:
-        # If markers don't exist, insert after header
-        insertion_point = dashboard_html.find('</div>\n\n  <!-- AUTOMATION STATUS -->')
-        if insertion_point > 0:
-            dashboard_html = dashboard_html[:insertion_point] + f'</div>\n\n  {misprice_section}\n\n  <!-- AUTOMATION STATUS -->' + dashboard_html[insertion_point+len('</div>\n\n  <!-- AUTOMATION STATUS -->'):]
+    with open(DASHBOARD_FILE, 'w', encoding='utf-8') as f:
+        f.write(str(soup))
 
-    # Write updated dashboard
-    with open(DASHBOARD_FILE, 'w') as f:
-        f.write(dashboard_html)
-
-    print(f"✓ Dashboard updated with {len(misprices)} misprices")
+    print(f"✓ Dashboard updated with {len(misprices)} misprices at {now_str}")
 
 def main():
     """Main execution"""
