@@ -2,58 +2,44 @@ name: Hourly Hotel Misprice Check
 
 on:
   schedule:
-    - cron: '0 * * * *'   # Every hour on the hour (UTC)
-  workflow_dispatch:        # Allow manual trigger from Actions tab
+    - cron: '1 * * * *'  # Run at :01 minutes every hour
+  workflow_dispatch:  # Allow manual trigger
 
 jobs:
   check-misprices:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    permissions:
-      contents: write       # Required to commit dashboard HTML back to repo
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: '3.10'
 
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
-          pip install \
-            feedparser \
-            requests \
-            beautifulsoup4 \
-            lxml
+          python -m pip install --upgrade pip
+          pip install requests feedparser beautifulsoup4
 
       - name: Run misprice checker
         env:
           OUTPUT_DIR: ${{ github.workspace }}
-          GMAIL_USER: ${{ secrets.GMAIL_USER }}
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
-        run: |
-          python misprice_checker.py
+        run: python misprice_checker.py
 
-      - name: Commit updated dashboard
+      - name: Configure Git
         run: |
-          git config user.name  "Hotel Misprice Bot"
-          git config user.email "bot@github-actions"
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action Bot"
 
-          # Only commit if the dashboard actually changed
-          if git diff --quiet luxury-hotel-deals-report.html misprice-log.txt 2>/dev/null; then
-            echo "No changes to dashboard or log — skipping commit"
-          else
-            git add luxury-hotel-deals-report.html misprice-log.txt
-            git commit -m "chore: auto-update dashboard [$(date -u '+%Y-%m-%d %H:%M UTC')]"
-            git push
-            echo "Dashboard committed and pushed"
-          fi
+      - name: Commit and push updates
+        run: |
+          git add luxury-hotel-deals-report.html misprice-log.txt
+          git commit -m "🚨 Dashboard update: $(date +'%Y-%m-%d %H:%M UTC')" || echo "No changes to commit"
+          git push
+
+      - name: Log execution
+        run: |
+          echo "✓ Misprice check completed at $(date)"
+          echo "Files checked: misprice-log.txt, luxury-hotel-deals-report.html"
