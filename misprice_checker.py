@@ -31,6 +31,24 @@ SAFE_COUNTRIES = {
 
 STAR_KEYWORDS = ["5 star", "5-star", "luxury", "four star", "4 star", "4-star", "premium"]
 
+# Must contain at least one of these to count as a real misprice/deal
+MISPRICE_KEYWORDS = [
+    "mistake", "misprice", "mistake rate", "error rate", "pricing error",
+    "glitch", "bug rate", "accidental", "sale", "flash sale",
+    "% off", "percent off", "discount", "deal", "offer",
+    "cheap", "mistake fare", "error fare", "from £", "from $", "from €",
+    "award rate", "reward night", "free night", "points rate"
+]
+
+# Noise to exclude — blog articles, opinion pieces, general news
+EXCLUDE_KEYWORDS = [
+    "credit card", "amex", "american express", "points strategy",
+    "how to earn", "tier points", "status match", "mobile check-in",
+    "joins star alliance", "leaves marriott", "acquisition", "review:",
+    "interview", "opinion", "guide to", "best credit", "earn miles",
+    "lounge review", "flight review", "transfer bonus"
+]
+
 def load_misprice_log():
     """Load existing misprices from the last 24 hours"""
     misprices = {}
@@ -295,13 +313,20 @@ def update_dashboard(misprices):
 
     print(f"✓ Dashboard updated with {len(misprices)} misprices at {now_str}")
 
-def check_head_for_points():
-    """Monitor Head for Points — UK luxury hotel deal blog with RSS"""
+def is_real_deal(combined):
+    """Returns True only if text contains misprice/deal signals and no noise keywords"""
+    has_deal_signal = any(kw in combined for kw in MISPRICE_KEYWORDS)
+    has_noise = any(kw in combined for kw in EXCLUDE_KEYWORDS)
+    return has_deal_signal and not has_noise
+
+
+def scrape_rss_feed(url, source_name, require_price=False):
+    """Generic RSS feed scraper with consistent filtering"""
     misprices = []
     try:
-        feed = feedparser.parse("https://www.headforpoints.com/feed/")
-        print(f"   Head for Points: {len(feed.entries)} entries in feed")
-        for entry in feed.entries[:20]:
+        feed = feedparser.parse(url)
+        print(f"   {source_name}: {len(feed.entries)} entries in feed")
+        for entry in feed.entries[:25]:
             title = entry.get('title', '')
             title_lower = title.lower()
             summary = entry.get('summary', '').lower()
@@ -309,136 +334,18 @@ def check_head_for_points():
             link = entry.get('link', '')
             published = entry.get('published', '')
 
-            is_hotel = any(kw in combined for kw in STAR_KEYWORDS + ['hotel', 'resort', 'suite', 'palace', 'villa'])
-            is_deal = any(kw in combined for kw in ['deal', 'offer', 'sale', 'discount', 'mistake', 'error', 'misprice', 'cheap', 'rate', '%'])
-            if not (is_hotel and is_deal):
-                continue
-
-            location = "International"
-            for country in SAFE_COUNTRIES:
-                if country.lower() in combined:
-                    location = country
-                    break
-
-            price_match = re.search(r'[£$€]\s*[\d,]+', title)
-            price = price_match.group().replace(' ', '') if price_match else "See post"
-
-            misprices.append({
-                "hotel": title[:80],
-                "location": location,
-                "price": price,
-                "normal_price": "N/A",
-                "source": "Head for Points",
-                "link": link,
-                "published": published or datetime.utcnow().isoformat()
-            })
-    except Exception as e:
-        print(f"   Error checking Head for Points: {e}")
-    return misprices
-
-
-def check_view_from_the_wing():
-    """Monitor View from the Wing (Gary Leff) — excellent misprice coverage"""
-    misprices = []
-    try:
-        feed = feedparser.parse("https://viewfromthewing.com/feed/")
-        print(f"   View from the Wing: {len(feed.entries)} entries in feed")
-        for entry in feed.entries[:20]:
-            title = entry.get('title', '')
-            title_lower = title.lower()
-            summary = entry.get('summary', '').lower()
-            combined = title_lower + ' ' + summary
-            link = entry.get('link', '')
-            published = entry.get('published', '')
-
-            is_hotel = any(kw in combined for kw in STAR_KEYWORDS + ['hotel', 'resort', 'suite', 'hyatt', 'marriott', 'hilton', 'aman', 'four seasons'])
-            is_deal = any(kw in combined for kw in ['mistake', 'error', 'misprice', 'glitch', 'deal', 'award', 'rate', 'cheap', 'free night'])
-            if not (is_hotel and is_deal):
-                continue
-
-            location = "International"
-            for country in SAFE_COUNTRIES:
-                if country.lower() in combined:
-                    location = country
-                    break
-
-            price_match = re.search(r'[£$€]\s*[\d,]+', title)
-            price = price_match.group().replace(' ', '') if price_match else "See post"
-
-            misprices.append({
-                "hotel": title[:80],
-                "location": location,
-                "price": price,
-                "normal_price": "N/A",
-                "source": "View from the Wing",
-                "link": link,
-                "published": published or datetime.utcnow().isoformat()
-            })
-    except Exception as e:
-        print(f"   Error checking View from the Wing: {e}")
-    return misprices
-
-
-def check_one_mile_at_a_time():
-    """Monitor One Mile at a Time (Ben Schlappig) — luxury hotel mistakes"""
-    misprices = []
-    try:
-        feed = feedparser.parse("https://onemileatatime.com/feed/")
-        print(f"   One Mile at a Time: {len(feed.entries)} entries in feed")
-        for entry in feed.entries[:20]:
-            title = entry.get('title', '')
-            title_lower = title.lower()
-            summary = entry.get('summary', '').lower()
-            combined = title_lower + ' ' + summary
-            link = entry.get('link', '')
-            published = entry.get('published', '')
-
-            is_hotel = any(kw in combined for kw in STAR_KEYWORDS + ['hotel', 'resort', 'suite', 'palace', 'four seasons', 'aman', 'ritz'])
-            is_deal = any(kw in combined for kw in ['mistake', 'error', 'misprice', 'deal', 'rate', 'cheap', 'sale', 'offer', 'discount'])
-            if not (is_hotel and is_deal):
-                continue
-
-            location = "International"
-            for country in SAFE_COUNTRIES:
-                if country.lower() in combined:
-                    location = country
-                    break
-
-            price_match = re.search(r'[£$€]\s*[\d,]+', title)
-            price = price_match.group().replace(' ', '') if price_match else "See post"
-
-            misprices.append({
-                "hotel": title[:80],
-                "location": location,
-                "price": price,
-                "normal_price": "N/A",
-                "source": "One Mile at a Time",
-                "link": link,
-                "published": published or datetime.utcnow().isoformat()
-            })
-    except Exception as e:
-        print(f"   Error checking One Mile at a Time: {e}")
-    return misprices
-
-
-def check_holiday_pirates():
-    """Monitor Holiday Pirates RSS — good volume of hotel deals"""
-    misprices = []
-    try:
-        feed = feedparser.parse("https://www.holidaypirates.com/feeds/deals.rss")
-        print(f"   Holiday Pirates: {len(feed.entries)} entries in feed")
-        for entry in feed.entries[:20]:
-            title = entry.get('title', '')
-            title_lower = title.lower()
-            summary = entry.get('summary', '').lower()
-            combined = title_lower + ' ' + summary
-            link = entry.get('link', '')
-            published = entry.get('published', '')
-
-            is_hotel = any(kw in combined for kw in STAR_KEYWORDS + ['hotel', 'resort', 'all-inclusive', 'suite'])
+            # Must be hotel related
+            is_hotel = any(kw in combined for kw in STAR_KEYWORDS + [
+                'hotel', 'resort', 'suite', 'palace', 'villa', 'hyatt', 'marriott',
+                'hilton', 'aman', 'four seasons', 'ritz', 'accor', 'ihg', 'radisson'
+            ])
             if not is_hotel:
                 continue
 
+            # Must be a real deal, not a blog article
+            if not is_real_deal(combined):
+                continue
+
             location = "International"
             for country in SAFE_COUNTRIES:
                 if country.lower() in combined:
@@ -446,26 +353,58 @@ def check_holiday_pirates():
                     break
 
             price_match = re.search(r'[£$€]\s*[\d,]+', title)
-            price = price_match.group().replace(' ', '') if price_match else "See deal"
+            price = price_match.group().replace(' ', '') if price_match else "See post"
+
+            if require_price and not price_match:
+                continue
 
             misprices.append({
                 "hotel": title[:80],
                 "location": location,
                 "price": price,
                 "normal_price": "N/A",
-                "source": "Holiday Pirates",
+                "source": source_name,
                 "link": link,
                 "published": published or datetime.utcnow().isoformat()
             })
     except Exception as e:
-        print(f"   Error checking Holiday Pirates: {e}")
+        print(f"   Error checking {source_name}: {e}")
     return misprices
 
 
+def check_head_for_points():
+    return scrape_rss_feed("https://www.headforpoints.com/feed/", "Head for Points")
+
+def check_view_from_the_wing():
+    return scrape_rss_feed("https://viewfromthewing.com/feed/", "View from the Wing")
+
+def check_one_mile_at_a_time():
+    return scrape_rss_feed("https://onemileatatime.com/feed/", "One Mile at a Time")
+
+def check_holiday_pirates():
+    return scrape_rss_feed("https://www.holidaypirates.com/feeds/deals.rss", "Holiday Pirates")
+
+def check_the_points_guy():
+    """The Points Guy — major US travel site, covers hotel mistake rates"""
+    return scrape_rss_feed("https://thepointsguy.com/feed/", "The Points Guy")
+
+def check_frequent_miler():
+    """Frequent Miler — US blog, excellent hotel misprice coverage"""
+    return scrape_rss_feed("https://frequentmiler.com/feed/", "Frequent Miler")
+
+def check_doctor_of_credit():
+    """Doctor of Credit — catches pricing errors quickly"""
+    return scrape_rss_feed("https://www.doctorofcredit.com/feed/", "Doctor of Credit")
+
+def check_miles_to_memories():
+    """Miles to Memories — US travel deals blog"""
+    return scrape_rss_feed("https://milestomemories.com/feed/", "Miles to Memories")
+
+
 def check_reddit_travel():
-    """Monitor Reddit r/TravelHacks and r/deals for hotel misprices"""
+    """Monitor Reddit travel communities for hotel misprices"""
     misprices = []
-    subreddits = ["TravelHacks", "deals", "shoestring"]
+    subreddits = ["TravelHacks", "deals", "shoestring", "awardtravel"]
     try:
         for sub in subreddits:
             response = requests.get(
@@ -483,12 +422,10 @@ def check_reddit_travel():
                     title_lower = title.lower()
                     text = d.get('selftext', '').lower()
                     combined = title_lower + ' ' + text
-                    link = d.get('url', '')
                     reddit_link = f"https://reddit.com{d.get('permalink', '')}"
 
                     is_hotel = any(kw in combined for kw in STAR_KEYWORDS + ['hotel', 'resort', 'suite', 'palace'])
-                    is_deal = any(kw in combined for kw in ['mistake', 'misprice', 'error', 'deal', 'cheap', 'glitch', 'sale'])
-                    if not (is_hotel and is_deal):
+                    if not is_hotel or not is_real_deal(combined):
                         continue
 
                     location = "International"
@@ -497,7 +434,7 @@ def check_reddit_travel():
                             location = country
                             break
 
-                    price_match = re.search(r'[£$€\$]\s*[\d,]+', title)
+                    price_match = re.search(r'[£$€]\s*[\d,]+', title)
                     price = price_match.group().replace(' ', '') if price_match else "See post"
 
                     misprices.append({
@@ -554,12 +491,31 @@ def main():
     hp_misprices = check_holiday_pirates()
     print(f"   Found {len(hp_misprices)} entries from Holiday Pirates")
 
+    print("📡 Checking The Points Guy...")
+    tpg_misprices = check_the_points_guy()
+    print(f"   Found {len(tpg_misprices)} entries from The Points Guy")
+
+    print("📡 Checking Frequent Miler...")
+    fm_misprices = check_frequent_miler()
+    print(f"   Found {len(fm_misprices)} entries from Frequent Miler")
+
+    print("📡 Checking Doctor of Credit...")
+    doc_misprices = check_doctor_of_credit()
+    print(f"   Found {len(doc_misprices)} entries from Doctor of Credit")
+
+    print("📡 Checking Miles to Memories...")
+    mtm_misprices = check_miles_to_memories()
+    print(f"   Found {len(mtm_misprices)} entries from Miles to Memories")
+
     print("📡 Checking Reddit Travel communities...")
     reddit_misprices = check_reddit_travel()
     print(f"   Found {len(reddit_misprices)} entries from Reddit")
 
     # Combine and deduplicate
-    all_misprices = sf_misprices + ft_misprices + ff_misprices + hfp_misprices + vftw_misprices + omat_misprices + hp_misprices + reddit_misprices
+    all_misprices = (sf_misprices + ft_misprices + ff_misprices +
+                     hfp_misprices + vftw_misprices + omat_misprices +
+                     hp_misprices + tpg_misprices + fm_misprices +
+                     doc_misprices + mtm_misprices + reddit_misprices)
     new_misprices = []
 
     for mp in all_misprices:
