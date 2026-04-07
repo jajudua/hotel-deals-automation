@@ -264,81 +264,72 @@ def get_minutes_ago(timestamp_str):
         return 0
 
 def update_dashboard(misprices):
-    """Update the HTML dashboard with live misprices using BeautifulSoup"""
+    """Update the HTML dashboard using string replacement (preserves formatting)"""
     if not os.path.exists(DASHBOARD_FILE):
         print(f"Dashboard file not found at {DASHBOARD_FILE}")
         return
 
     with open(DASHBOARD_FILE, 'r', encoding='utf-8') as f:
-        dashboard_html = f.read()
+        html = f.read()
 
-    soup = BeautifulSoup(dashboard_html, 'html.parser')
     now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
 
-    # --- Update #mispriceAlerts div ---
-    alerts_div = soup.find('div', id='mispriceAlerts')
-    if alerts_div:
-        alerts_div.clear()
-        if misprices:
-            for mp in misprices:
-                hotel     = mp.get("hotel", "Hotel")
-                location  = mp.get("location", "Location")
-                price     = mp.get("price", "Price")
-                link      = mp.get("link", "#")
-                source    = mp.get("source", "Deal Site")
-                mins      = mp.get("minutes_ago", 0)
-                urgency   = "🔴 LIVE" if mins < 60 else ("🟠 COOLING" if mins < 360 else "⏳ FADING")
+    # --- Build misprice cards HTML ---
+    if misprices:
+        cards = ""
+        for mp in misprices:
+            hotel    = mp.get("hotel", "Hotel")
+            location = mp.get("location", "Location")
+            price    = mp.get("price", "Price")
+            link     = mp.get("link", "#")
+            source   = mp.get("source", "Deal Site")
+            mins     = mp.get("minutes_ago", 0)
+            urgency  = "LIVE" if mins < 60 else ("COOLING" if mins < 360 else "FADING")
+            color    = "#ff6464" if mins < 60 else ("#ff9944" if mins < 360 else "#888")
 
-                card_html = f'''
-<div style="background:#1a1a30;border:2px solid rgba(200,50,50,0.5);border-radius:10px;padding:18px;margin-bottom:12px;">
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
-    <div>
-      <p style="font-size:10px;color:#ff6464;letter-spacing:2px;text-transform:uppercase;margin:0 0 4px;">{location}</p>
-      <h3 style="font-size:16px;color:#fff;margin:0;font-weight:normal;">{hotel}</h3>
+            cards += f'''<div class="misprice-card">
+      <div class="misprice-location">{location}</div>
+      <h4>{hotel}</h4>
+      <div class="misprice-price">{price}</div>
+      <div class="misprice-time">{urgency} — {mins} mins ago · Source: {source}</div>
+      <a class="misprice-link" href="{link}">BOOK NOW →</a> <a class="misprice-link" href="{link}">See Post →</a>
     </div>
-    <span style="background:rgba(200,50,50,0.2);color:#ff6464;border:1px solid rgba(200,50,50,0.5);font-size:10px;font-weight:bold;padding:4px 10px;border-radius:20px;white-space:nowrap;">{urgency} — {mins} mins ago</span>
-  </div>
-  <p style="font-size:24px;color:#ff6464;font-weight:bold;margin:0 0 6px;">{price}</p>
-  <p style="font-size:13px;color:#8a90a0;margin:0 0 10px;">Source: {source}</p>
-  <div style="display:flex;gap:8px;">
-    <a href="{link}" style="flex:1;color:#fff;text-decoration:none;background:rgba(200,50,50,0.15);border:1px solid rgba(200,50,50,0.3);padding:6px;border-radius:5px;text-align:center;font-size:12px;font-weight:bold;">BOOK NOW →</a>
-    <a href="{link}" style="flex:1;color:#ff6464;text-decoration:none;border:1px solid rgba(200,50,50,0.3);padding:6px;border-radius:5px;text-align:center;font-size:12px;">See Post →</a>
-  </div>
-</div>'''
-                alerts_div.append(BeautifulSoup(card_html, 'html.parser'))
-        else:
-            empty = soup.new_tag('p')
-            empty['class'] = 'misprice-empty'
-            empty.string = f"No active misprices at the moment. Checking Secret Flying, FlyerTalk, and Fly4Free hourly. Last checked: {now_str}"
-            alerts_div.append(empty)
+    '''
+        alerts_content = cards
     else:
-        print("⚠ Could not find #mispriceAlerts div in dashboard")
+        alerts_content = f'<p class="misprice-empty">No active misprices at the moment. Checking 12 sources hourly. Last checked: {now_str}</p>'
 
-    # --- Update #mispriceLogo (activity log) div ---
-    log_div = soup.find('div', id='mispriceLogo')
-    if log_div:
-        log_div.clear()
-        if misprices:
-            for mp in misprices:
-                entry_html = f'''
-<div class="log-entry">
-  <span class="log-hotel">{mp.get("hotel","Hotel")} — {mp.get("location","Location")}</span>
-  <span class="log-time">{mp.get("price","N/A")} · {mp.get("source","?")} · just now</span>
-</div>'''
-                log_div.append(BeautifulSoup(entry_html, 'html.parser'))
-        else:
-            empty = soup.new_tag('p')
-            empty['class'] = 'log-empty'
-            empty.string = f"No misprices spotted yet. Last checked: {now_str}"
-            log_div.append(empty)
+    # --- Replace content inside <div id="mispriceAlerts"> ... </div> ---
+    pattern = r'(<div id="mispriceAlerts">)(.*?)(</div>)'
+    match = re.search(pattern, html, re.DOTALL)
+    if match:
+        html = html[:match.start(2)] + '\n    ' + alerts_content + '\n    ' + html[match.end(2):]
+        print(f"✓ Injected {len(misprices)} misprice cards into #mispriceAlerts")
+    else:
+        print("⚠ Could not find <div id=\"mispriceAlerts\"> in dashboard HTML")
 
-    # --- Update lastChecked span ---
-    span = soup.find('span', id='lastChecked')
-    if span:
-        span.string = now_str
+    # --- Replace content inside <div id="mispriceLogo"> ... </div> (activity log) ---
+    if misprices:
+        log_entries = ""
+        for mp in misprices:
+            log_entries += f'''<div class="log-entry">
+      <span class="log-hotel">{mp.get("hotel","Hotel")} — {mp.get("location","")}</span>
+      <span class="log-time">{mp.get("price","N/A")} · {mp.get("source","?")} · {mp.get("minutes_ago",0)} mins ago</span>
+    </div>
+    '''
+        log_content = log_entries
+    else:
+        log_content = f'<p class="log-empty">No misprices spotted yet. Last checked: {now_str}</p>'
 
+    log_pattern = r'(<div id="mispriceLogo">)(.*?)(</div>)'
+    log_match = re.search(log_pattern, html, re.DOTALL)
+    if log_match:
+        html = html[:log_match.start(2)] + '\n    ' + log_content + '\n    ' + html[log_match.end(2):]
+        print(f"✓ Updated activity log")
+
+    # --- Write back (unchanged except for injected sections) ---
     with open(DASHBOARD_FILE, 'w', encoding='utf-8') as f:
-        f.write(str(soup))
+        f.write(html)
 
     print(f"✓ Dashboard updated with {len(misprices)} misprices at {now_str}")
 
