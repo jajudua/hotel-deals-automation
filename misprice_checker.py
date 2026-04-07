@@ -29,15 +29,15 @@ SAFE_COUNTRIES = {
     "Canada", "USA", "Mexico"
 }
 
-STAR_KEYWORDS = ["5 star", "5-star", "luxury", "four star", "4 star", "4-star", "premium"]
+STAR_KEYWORDS = ["5 star", "5-star", "luxury", "four star", "4 star", "4-star", "4.5 star", "4.5-star", "superior", "deluxe", "boutique", "premium"]
 
 # Must contain at least one of these to count as a real misprice/deal
 MISPRICE_KEYWORDS = [
-    "mistake", "misprice", "mistake rate", "error rate", "pricing error",
-    "glitch", "bug rate", "accidental", "sale", "flash sale",
-    "% off", "percent off", "discount", "deal", "offer",
-    "cheap", "mistake fare", "error fare", "from £", "from $", "from €",
-    "award rate", "reward night", "free night", "points rate"
+    "mistake", "misprice", "mistake rate", "error rate", "pricing error", "Marriott price error",
+    "glitch", "bug rate", "accidental", "sale", "flash sale", "IHG rate error",
+    "% off", "percent off", "discount", "deal", "offer", "hotel rate error",
+    "cheap", "mistake fare", "error fare", "from £", "from $", "from €", "Hyatt mistake rate",
+    "award rate", "reward night", "free night", "points rate", "OTA pricing error"
 ]
 
 # Noise to exclude — blog articles, opinion pieces, general news
