@@ -358,14 +358,22 @@ def check_reddit_travel():
 # ── Dashboard updaters ───────────────────────────────────────────────────────
 
 def _inject(html, div_id, content):
-    """Replace the inner content of <div id="div_id">...</div> using regex"""
-    pattern = r'(<div id="' + re.escape(div_id) + r'">)(.*?)(</div>)'
-    match   = re.search(pattern, html, re.DOTALL)
-    if match:
-        html = html[:match.start(2)] + '\n    ' + content + '\n    ' + html[match.end(2):]
-        print(f"  ✓ Injected content into #{div_id}")
-    else:
-        print(f"  ⚠ Could not find <div id=\"{div_id}\"> in dashboard")
+    """
+    Replace content between sentinel comments inside a div.
+    Sentinels: <!-- SENTINEL:div_id:START --> ... <!-- SENTINEL:div_id:END -->
+    This is immune to nested divs and attribute ordering bugs.
+    """
+    start_marker = f'<!-- SENTINEL:{div_id}:START -->'
+    end_marker   = f'<!-- SENTINEL:{div_id}:END -->'
+    start_idx = html.find(start_marker)
+    end_idx   = html.find(end_marker)
+    if start_idx == -1 or end_idx == -1:
+        print(f"  ⚠ Sentinel markers not found for #{div_id} — skipping injection")
+        return html
+    # Replace everything between the sentinels (not including the sentinels themselves)
+    content_start = start_idx + len(start_marker)
+    html = html[:content_start] + '\n    ' + content + '\n    ' + html[end_idx:]
+    print(f"  ✓ Injected content into #{div_id}")
     return html
 
 
