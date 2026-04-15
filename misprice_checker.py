@@ -316,6 +316,146 @@ def check_fly4free():
     return entries
 
 
+def check_travelzoo():
+    """Travelzoo — flash hotel deals, very active for 4 and 5-star properties"""
+    entries = []
+    try:
+        # Travelzoo RSS feed for hotel deals
+        feed = feedparser.parse("https://www.travelzoo.com/blog/feed/")
+        print(f"   Travelzoo blog: {len(feed.entries)} entries")
+        for e in feed.entries[:25]:
+            entry = extract_entry(e, "Travelzoo")
+            if is_hotel_content(entry["combined"]):
+                entries.append(entry)
+
+        # Also scrape their top 20 deals page
+        r = requests.get(
+            "https://www.travelzoo.com/local-deals/international/",
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=10
+        )
+        if r.status_code == 200:
+            soup = BeautifulSoup(r.text, 'html.parser')
+            deals = soup.find_all(['h3', 'h2'], limit=30)
+            for deal in deals:
+                title = deal.get_text(strip=True)
+                combined = title.lower()
+                if not is_hotel_content(combined):
+                    continue
+                link_tag = deal.find('a') or deal.find_parent('a')
+                link = link_tag.get('href', 'https://www.travelzoo.com') if link_tag else 'https://www.travelzoo.com'
+                if not link.startswith('http'):
+                    link = 'https://www.travelzoo.com' + link
+                location = "International"
+                for c in SAFE_COUNTRIES:
+                    if c.lower() in combined:
+                        location = c
+                        break
+                price_m = re.search(r'[£$€]\s*[\d,]+', title)
+                entries.append({
+                    "hotel":     title[:90],
+                    "location":  location,
+                    "price":     price_m.group().replace(' ', '') if price_m else "See deal",
+                    "source":    "Travelzoo",
+                    "link":      link,
+                    "published": datetime.utcnow().isoformat() + "Z",
+                    "combined":  combined
+                })
+    except Exception as ex:
+        print(f"   Error Travelzoo: {ex}")
+    return entries
+
+
+def check_secret_escapes():
+    """Secret Escapes — luxury hotel flash sales, 50-70% off"""
+    entries = []
+    try:
+        r = requests.get(
+            "https://www.secretescapes.com/hotels",
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+            timeout=10
+        )
+        if r.status_code == 200:
+            soup = BeautifulSoup(r.text, 'html.parser')
+            # Secret Escapes uses various card layouts — grab anything with a title
+            cards = soup.find_all(['h2', 'h3', 'h4'], limit=40)
+            print(f"   Secret Escapes: {len(cards)} headings found")
+            seen = set()
+            for card in cards:
+                title = card.get_text(strip=True)
+                if not title or title in seen or len(title) < 5:
+                    continue
+                seen.add(title)
+                combined = title.lower()
+                if not is_hotel_content(combined):
+                    continue
+                location = "International"
+                for c in SAFE_COUNTRIES:
+                    if c.lower() in combined:
+                        location = c
+                        break
+                price_m = re.search(r'[£$€]\s*[\d,]+', title)
+                entries.append({
+                    "hotel":     title[:90],
+                    "location":  location,
+                    "price":     price_m.group().replace(' ', '') if price_m else "Members deal",
+                    "source":    "Secret Escapes",
+                    "link":      "https://www.secretescapes.com/hotels",
+                    "published": datetime.utcnow().isoformat() + "Z",
+                    "combined":  combined
+                })
+    except Exception as ex:
+        print(f"   Error Secret Escapes: {ex}")
+    return entries
+
+
+def check_luxury_escapes():
+    """Luxury Escapes — flash sales on 5-star resorts"""
+    entries = []
+    try:
+        r = requests.get(
+            "https://luxuryescapes.com/au/offers",
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+            timeout=10
+        )
+        if r.status_code == 200:
+            soup = BeautifulSoup(r.text, 'html.parser')
+            cards = soup.find_all(['h2', 'h3', 'h4'], limit=40)
+            print(f"   Luxury Escapes: {len(cards)} headings found")
+            seen = set()
+            for card in cards:
+                title = card.get_text(strip=True)
+                if not title or title in seen or len(title) < 5:
+                    continue
+                seen.add(title)
+                combined = title.lower()
+                if not is_hotel_content(combined):
+                    continue
+                location = "International"
+                for c in SAFE_COUNTRIES:
+                    if c.lower() in combined:
+                        location = c
+                        break
+                price_m = re.search(r'[£$€$A]\s*[\d,]+', title)
+                entries.append({
+                    "hotel":     title[:90],
+                    "location":  location,
+                    "price":     price_m.group().replace(' ', '') if price_m else "Flash sale",
+                    "source":    "Luxury Escapes",
+                    "link":      "https://luxuryescapes.com/offers",
+                    "published": datetime.utcnow().isoformat() + "Z",
+                    "combined":  combined
+                })
+    except Exception as ex:
+        print(f"   Error Luxury Escapes: {ex}")
+    return entries
+
+
+def check_loyalty_lobby():
+    """Loyalty Lobby — hotel loyalty program errors, award glitches, rate mistakes"""
+    return scrape_rss("https://loyaltylobby.com/feed/", "Loyalty Lobby")
+
+
 def check_reddit_travel():
     entries = []
     subreddits = ["TravelHacks", "deals", "shoestring", "awardtravel"]
@@ -568,6 +708,10 @@ def main():
         ("📡 Doctor of Credit",     check_doctor_of_credit),
         ("📡 Miles to Memories",    check_miles_to_memories),
         ("📡 Reddit",               check_reddit_travel),
+        ("📡 Travelzoo",            check_travelzoo),
+        ("📡 Secret Escapes",       check_secret_escapes),
+        ("📡 Luxury Escapes",       check_luxury_escapes),
+        ("📡 Loyalty Lobby",        check_loyalty_lobby),
     ]
 
     all_entries = []
