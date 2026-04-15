@@ -377,6 +377,75 @@ def _inject(html, div_id, content):
     return html
 
 
+# ── Star rating classification ───────────────────────────────────────────────
+
+FIVE_STAR_SIGNALS = [
+    "5-star", "5 star", "five star", "ultra luxury", "ultra-luxury",
+    "aman ", "amanjiwo", "amanyara", "four seasons", "ritz-carlton", "ritz carlton",
+    "rosewood", "cheval blanc", "mandarin oriental", "belmond", "one&only", "one and only",
+    "oberoi", "taj hotel", "soneva", "sandy lane", "bulgari hotel",
+    "waldorf astoria", "st regis", "peninsula hotel", "raffles",
+    "orient express", "burj al arab", "park hyatt"
+]
+
+FOUR_HALF_STAR_SIGNALS = [
+    "4.5-star", "4.5 star", "four and a half", "superior deluxe",
+    "jw marriott", "w hotel", "w resort", "w maldives", "capella",
+    "sofitel legend", "sofitel luxury", "hotel arts", "bairro alto",
+    "jumeirah", "atlantis the palm", "one&only royal", "excellence resort",
+    "hyatt ziva", "secrets resort", "zoetry", "paradisus", "anantara",
+    "six senses", "alila", "banyan tree"
+]
+
+FOUR_STAR_SIGNALS = [
+    "4-star", "4 star", "four star",
+    "hyatt regency", "hyatt centric", "hyatt place", "andaz",
+    "marriott", "sheraton", "westin", "le meridien", "delta hotels",
+    "hilton", "doubletree", "curio collection", "tapestry collection",
+    "iberostar", "riu ", "melia ", "barcelo", "sandals", "royalton",
+    "hard rock hotel", "moon palace", "grand palladium", "occidental",
+    "bahia duque", "sol hotel", "novotel", "pullman", "mercure",
+    "radisson", "ihg ", "voco ", "crowne plaza", "holiday inn resort"
+]
+
+def classify_stars(combined):
+    """Return '5', '4.5', or '4' based on keywords in combined text"""
+    for sig in FIVE_STAR_SIGNALS:
+        if sig in combined:
+            return "5"
+    for sig in FOUR_HALF_STAR_SIGNALS:
+        if sig in combined:
+            return "4.5"
+    for sig in FOUR_STAR_SIGNALS:
+        if sig in combined:
+            return "4"
+    # Default: if it mentions luxury generically, assume 4.5; otherwise 4
+    if "luxury" in combined or "boutique" in combined:
+        return "4.5"
+    return "4"
+
+
+def _build_deal_card(d):
+    """Render a single deal dict as a deal-card HTML block"""
+    mins = d.get("minutes_ago", 0)
+    if mins < 60:
+        age_str = f"{mins} mins ago"
+    elif mins < 1440:
+        age_str = f"{mins // 60}h ago"
+    else:
+        age_str = f"{mins // 1440}d ago"
+    return (
+        f'<div class="deal-card" style="border-color:rgba(201,168,76,0.4);">\n'
+        f'      <div class="location">{d.get("location","International")}</div>\n'
+        f'      <h3>{d.get("hotel","Deal")[:75]}</h3>\n'
+        f'      <div class="price">{d.get("price","See post")}</div>\n'
+        f'      <div class="desc" style="font-size:11px; color:#556;">'
+        f'📡 {d.get("source","")} &nbsp;·&nbsp; {age_str}</div>\n'
+        f'      <a href="{d.get("link","#")}">View Deal →</a>\n'
+        f'    </div>\n    '
+    )
+
+
 def update_dashboard(misprice_alerts, scraped_deals):
     if not os.path.exists(DASHBOARD_FILE):
         print(f"Dashboard file not found: {DASHBOARD_FILE}")
@@ -393,14 +462,16 @@ def update_dashboard(misprice_alerts, scraped_deals):
         for mp in misprice_alerts:
             mins    = mp.get("minutes_ago", 0)
             urgency = "LIVE" if mins < 60 else ("COOLING" if mins < 360 else "FADING")
-            cards += f'''<div class="misprice-card">
-      <div class="misprice-location">{mp.get("location","")}</div>
-      <h4>{mp.get("hotel","Hotel")}</h4>
-      <div class="misprice-price">{mp.get("price","")}</div>
-      <div class="misprice-time">{urgency} — {mins} mins ago · Source: {mp.get("source","")}</div>
-      <a class="misprice-link" href="{mp.get("link","#")}">BOOK NOW →</a>&nbsp;
-      <a class="misprice-link" href="{mp.get("link","#")}">See Post →</a>
-    </div>\n    '''
+            cards += (
+                f'<div class="misprice-card">\n'
+                f'      <div class="misprice-location">{mp.get("location","")}</div>\n'
+                f'      <h4>{mp.get("hotel","Hotel")}</h4>\n'
+                f'      <div class="misprice-price">{mp.get("price","")}</div>\n'
+                f'      <div class="misprice-time">{urgency} — {mins} mins ago · Source: {mp.get("source","")}</div>\n'
+                f'      <a class="misprice-link" href="{mp.get("link","#")}">BOOK NOW →</a>&nbsp;'
+                f'<a class="misprice-link" href="{mp.get("link","#")}">See Post →</a>\n'
+                f'    </div>\n    '
+            )
         html = _inject(html, "mispriceAlerts", cards)
     else:
         html = _inject(html, "mispriceAlerts",
@@ -421,35 +492,53 @@ def update_dashboard(misprice_alerts, scraped_deals):
         html = _inject(html, "mispriceLogo",
             f'<p class="log-empty">No misprices logged yet. Last checked: {now_str}</p>')
 
-    # ── 3. Latest scraped deals card grid (last 7 days) ───────────────────
-    if scraped_deals:
-        deal_cards = ""
-        for d in scraped_deals[:40]:   # cap at 40 cards so page stays manageable
-            mins = d.get("minutes_ago", 0)
-            if mins < 60:
-                age_str = f"{mins} mins ago"
-            elif mins < 1440:
-                age_str = f"{mins // 60}h ago"
-            else:
-                age_str = f"{mins // 1440}d ago"
+    # ── 3. Split scraped deals by star rating ─────────────────────────────
+    five_star    = []
+    four_half    = []
+    four_star    = []
 
-            deal_cards += f'''<div class="deal-card">
-      <div class="location">{d.get("location","International")}</div>
-      <h3>{d.get("hotel","Deal")[:70]}</h3>
-      <div class="price">{d.get("price","See post")}</div>
-      <div class="desc" style="font-size:11px; color:#556;">
-        📡 {d.get("source","")} &nbsp;·&nbsp; {age_str}
-      </div>
-      <a href="{d.get("link","#")}">View Deal →</a>
-    </div>\n    '''
-        html = _inject(html, "latestDeals", deal_cards)
+    for d in scraped_deals:
+        rating = classify_stars(d.get("combined", d.get("hotel","")).lower())
+        if rating == "5":
+            five_star.append(d)
+        elif rating == "4.5":
+            four_half.append(d)
+        else:
+            four_star.append(d)
+
+    print(f"  Deals split: {len(five_star)} × 5★  |  {len(four_half)} × 4.5★  |  {len(four_star)} × 4★")
+
+    # ── 4. Inject into star sections (live deals appear above static watchlist) ─
+    def build_star_block(deals, cap=20):
+        if not deals:
+            return ""
+        header = (
+            '<div style="font-size:11px; color:#32c864; letter-spacing:2px; '
+            'text-transform:uppercase; margin-bottom:10px; padding:6px 10px; '
+            'background:rgba(50,200,100,0.08); border:1px solid rgba(50,200,100,0.2); '
+            'border-radius:6px; display:inline-block;">🔴 LIVE DEALS FROM 12 SOURCES</div>\n    '
+        )
+        cards = "".join(_build_deal_card(d) for d in deals[:cap])
+        return header + cards
+
+    html = _inject(html, "fiveStarLive",    build_star_block(five_star))
+    html = _inject(html, "fourHalfStarLive",build_star_block(four_half))
+    html = _inject(html, "fourStarLive",    build_star_block(four_star))
+
+    # ── 5. Orange "latest deals" summary section (all deals, last 7 days) ─
+    if scraped_deals:
+        all_cards = "".join(_build_deal_card(d) for d in scraped_deals[:40])
+        html = _inject(html, "latestDeals", all_cards)
     else:
         html = _inject(html, "latestDeals",
-            f'<p style="color:#556; font-size:13px;">No deals found in the last 7 days. Last checked: {now_str}</p>')
+            f'<p style="color:#556; font-size:13px;">No deals found in the last 7 days. '
+            f'Last checked: {now_str}</p>')
 
     with open(DASHBOARD_FILE, 'w', encoding='utf-8') as f:
         f.write(html)
-    print(f"✓ Dashboard written ({len(misprice_alerts)} alerts, {len(scraped_deals)} deal cards)")
+    print(f"✓ Dashboard written — {len(misprice_alerts)} alerts, "
+          f"{len(five_star)}+{len(four_half)}+{len(four_star)} star deals, "
+          f"{len(scraped_deals)} in summary section")
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
