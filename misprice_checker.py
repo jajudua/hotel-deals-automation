@@ -1,18 +1,27 @@
 #!/usr/bin/env python3
 """
-Hotel Misprice Checker — v2 (with Live Deal Cards)
-- Monitors 12 sources hourly via GitHub Actions
+Hotel Misprice Checker — v2 (with Live Deal Cards + Email Alerts)
+- Monitors 16 sources hourly via GitHub Actions
 - Populates 🚨 Misprice Alerts (strict: error/mistake/flash sale signals)
-- Populates 🔴 Latest Scraped Deals card grid (broader: any hotel deal from 12 sources, kept 7 days)
+- Populates deal cards by star rating (5★ and 4.5★)
+- Emails joseph when new misprices or deals are found
 """
 
 import os
 import json
 import requests
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 import feedparser
 import re
 from bs4 import BeautifulSoup
+
+# ── Email config — matches your existing GitHub Secrets ─────────────────────
+GMAIL_SENDER   = os.getenv("GMAIL_USER", "")           # secret: GMAIL_USER
+GMAIL_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")   # secret: GMAIL_APP_PASSWORD
+NOTIFY_EMAIL   = os.getenv("ALERT_EMAIL", "josephajudua@googlemail.com")  # secret: ALERT_EMAIL
 
 # ── Config ──────────────────────────────────────────────────────────────────
 OUTPUT_DIR      = os.getenv("OUTPUT_DIR", ".")
@@ -517,6 +526,117 @@ def _inject(html, div_id, content):
     return html
 
 
+# ── Email notifications ──────────────────────────────────────────────────────
+
+def send_email_alert(new_misprices, new_deals):
+    """Send email when new misprices or deals are found this run"""
+    if not GMAIL_SENDER or not GMAIL_PASSWORD:
+        print("  ⚠ Email not configured — set GMAIL_SENDER and GMAIL_PASSWORD secrets")
+        return
+    if not new_misprices and not new_deals:
+        print("  ℹ No new finds this run — no email sent")
+        return
+
+    now_str  = datetime.utcnow().strftime("%d %b %Y %H:%M UTC")
+    subject  = ""
+    if new_misprices:
+        subject = f"🚨 {len(new_misprices)} Hotel Misprice{'s' if len(new_misprices)>1 else ''} Found — {now_str}"
+    else:
+        subject = f"🏨 {len(new_deals)} New Hotel Deal{'s' if len(new_deals)>1 else ''} Found — {now_str}"
+
+    # Build HTML email body
+    dashboard_url = "https://jajudua.github.io/hotel-deals-automation/luxury-hotel-deals-report.html"
+
+    rows = ""
+
+    if new_misprices:
+        rows += """
+        <tr><td colspan="4" style="background:#1a0a0a; color:#ff6464; font-size:13px;
+            font-weight:bold; padding:10px 14px; letter-spacing:1px;">
+            🚨 MISPRICE ALERTS — BOOK FAST, THESE DON'T LAST
+        </td></tr>"""
+        for m in new_misprices:
+            rows += f"""
+        <tr style="border-bottom:1px solid #222;">
+          <td style="padding:10px 14px; color:#fff; font-size:13px;">{m.get('hotel','')[:60]}</td>
+          <td style="padding:10px 14px; color:#aaa; font-size:12px;">{m.get('location','')}</td>
+          <td style="padding:10px 14px; color:#ff6464; font-size:14px; font-weight:bold;">{m.get('price','')}</td>
+          <td style="padding:10px 14px;">
+            <a href="{m.get('link','#')}" style="background:#ff4444; color:#fff; padding:6px 12px;
+               border-radius:4px; text-decoration:none; font-size:12px; font-weight:bold;">BOOK NOW →</a>
+          </td>
+        </tr>"""
+
+    if new_deals:
+        rows += """
+        <tr><td colspan="4" style="background:#0a1a0a; color:#32c864; font-size:13px;
+            font-weight:bold; padding:10px 14px; letter-spacing:1px;">
+            🏨 NEW DEALS FOUND THIS HOUR
+        </td></tr>"""
+        for d in new_deals[:15]:   # cap at 15 deals in email
+            rows += f"""
+        <tr style="border-bottom:1px solid #222;">
+          <td style="padding:10px 14px; color:#fff; font-size:13px;">{d.get('hotel','')[:60]}</td>
+          <td style="padding:10px 14px; color:#aaa; font-size:12px;">{d.get('location','')}</td>
+          <td style="padding:10px 14px; color:#c9a84c; font-size:14px; font-weight:bold;">{d.get('price','')}</td>
+          <td style="padding:10px 14px;">
+            <a href="{d.get('link','#')}" style="background:#c9a84c; color:#000; padding:6px 12px;
+               border-radius:4px; text-decoration:none; font-size:12px; font-weight:bold;">View Deal →</a>
+          </td>
+        </tr>"""
+
+    html_body = f"""
+<!DOCTYPE html>
+<html>
+<body style="margin:0; padding:0; background:#0a0a0f; font-family:Georgia,serif;">
+  <div style="max-width:620px; margin:0 auto; padding:24px;">
+
+    <div style="background:linear-gradient(135deg,#1a1a2e,#0f3460); border:1px solid #c9a84c;
+         border-radius:10px; padding:28px; text-align:center; margin-bottom:20px;">
+      <div style="color:#c9a84c; font-size:11px; letter-spacing:3px; text-transform:uppercase;
+           margin-bottom:10px;">📡 Hotel Deal Alert</div>
+      <h1 style="color:#fff; font-size:22px; margin:0 0 8px;">
+        {'🚨 Misprice Alert' if new_misprices else '🏨 New Deals Found'}
+      </h1>
+      <p style="color:#a0a8b8; font-size:13px; margin:0;">{now_str}</p>
+    </div>
+
+    <table width="100%" cellpadding="0" cellspacing="0"
+           style="background:#12121f; border:1px solid #222; border-radius:8px; overflow:hidden;">
+      {rows}
+    </table>
+
+    <div style="text-align:center; margin-top:20px;">
+      <a href="{dashboard_url}"
+         style="background:#c9a84c; color:#000; padding:12px 28px; border-radius:6px;
+                text-decoration:none; font-size:14px; font-weight:bold; display:inline-block;">
+        View Full Dashboard →
+      </a>
+    </div>
+
+    <p style="color:#333; font-size:11px; text-align:center; margin-top:20px;">
+      Checking 16 sources every hour · Unsubscribe by removing NOTIFY_EMAIL secret
+    </p>
+  </div>
+</body>
+</html>"""
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"]    = GMAIL_SENDER
+        msg["To"]      = NOTIFY_EMAIL
+        msg.attach(MIMEText(html_body, "html"))
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(GMAIL_SENDER, GMAIL_PASSWORD)
+            server.sendmail(GMAIL_SENDER, NOTIFY_EMAIL, msg.as_string())
+
+        print(f"  ✅ Email sent to {NOTIFY_EMAIL} — {len(new_misprices)} misprices, {len(new_deals)} deals")
+    except Exception as e:
+        print(f"  ✗ Email failed: {e}")
+
+
 # ── Star rating classification ───────────────────────────────────────────────
 
 FIVE_STAR_SIGNALS = [
@@ -767,6 +887,11 @@ def main():
     print(f"📊 New this run:       {new_misprices} misprices, {new_deals} deals\n")
 
     update_dashboard(recent_misprices, recent_deals)
+
+    # Send email if anything new was found this run
+    new_misprice_list = [m for m in recent_misprices if m.get("minutes_ago", 999) < 65]
+    new_deal_list     = [d for d in recent_deals     if d.get("minutes_ago", 999) < 65]
+    send_email_alert(new_misprice_list, new_deal_list)
 
     print(f"\n✓ Done. {new_misprices} new misprices, {new_deals} new deals this run.")
     print("=" * 55)
