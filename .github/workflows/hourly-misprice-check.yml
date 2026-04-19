@@ -29,6 +29,9 @@ jobs:
       - name: Run misprice checker
         env:
           OUTPUT_DIR: ${{ github.workspace }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
         run: python misprice_checker.py
 
       - name: Configure Git
